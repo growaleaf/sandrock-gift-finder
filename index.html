@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Time at Sandrock — Gift Preference Finder</title>
+<style>
+  :root {
+    --bg: #1b140f;
+    --panel: #26190f;
+    --border: #4a3522;
+    --text: #f0e6d6;
+    --muted: #b9a98d;
+    --love: #c8553d;
+    --like: #3d8f6c;
+    --dislike: #8a7a3d;
+    --hate: #6b2e2e;
+    --refuse: #4a2b4a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Georgia, "Times New Roman", serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  header {
+    padding: 1.5rem 1rem 1rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    margin: 0 0 0.3rem;
+    font-size: 1.6rem;
+  }
+  header p {
+    margin: 0.2rem 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  main {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 1rem;
+  }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  section h2 {
+    margin-top: 0;
+    font-size: 1.1rem;
+  }
+  input[type="text"], select {
+    width: 100%;
+    padding: 0.6rem;
+    font-size: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #140e09;
+    color: var(--text);
+  }
+  #search-results { margin-top: 1rem; }
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0.6rem;
+    border-radius: 6px;
+    margin-bottom: 0.35rem;
+  }
+  .tier-love { background: var(--love); }
+  .tier-like { background: var(--like); }
+  .tier-dislike { background: var(--dislike); }
+  .tier-hate { background: var(--hate); }
+  .tier-refuse { background: var(--refuse); }
+  .result-row .tag {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.9;
+  }
+  .empty-note {
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .char-note {
+    color: var(--muted);
+    font-style: italic;
+  }
+  .tier-block {
+    margin-bottom: 0.9rem;
+  }
+  .tier-block h3 {
+    margin: 0 0 0.3rem;
+    font-size: 0.95rem;
+    display: flex;
+    justify-content: space-between;
+  }
+  .tier-block ul {
+    margin: 0;
+    padding-left: 1.1rem;
+    columns: 2;
+  }
+  .tier-block ul li {
+    font-size: 0.9rem;
+  }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.75rem;
+    padding: 1.5rem 1rem 2rem;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>My Time at Sandrock — Gift Preference Finder</h1>
+  <p id="source-line"></p>
+  <p>Values may have changed in-game since the source page was last updated. Verify before gifting if it matters.</p>
+</header>
+<main>
+  <section>
+    <h2>Find who likes an item</h2>
+    <input type="text" id="item-search" placeholder="Type an item name, e.g. Diamond, Firefly…" autocomplete="off">
+    <div id="search-results"></div>
+  </section>
+
+  <section>
+    <h2>Look up a character</h2>
+    <select id="character-select"></select>
+    <div id="character-detail"></div>
+  </section>
+</main>
+<footer id="footer-note"></footer>
+
+<script src="data.js"></script>
+<script>
+(function () {
+  var TIER_ORDER = ["Love", "Like", "Dislike", "Hate", "Refuse"];
+  var TIER_CLASS = {
+    Love: "tier-love",
+    Like: "tier-like",
+    Dislike: "tier-dislike",
+    Hate: "tier-hate",
+    Refuse: "tier-refuse"
+  };
+
+  function tierRank(tierName) {
+    var i = TIER_ORDER.indexOf(tierName);
+    return i === -1 ? TIER_ORDER.length : i;
+  }
+
+  function setSourceLine() {
+    var line = "Source: thenerdstash.com (page last updated " + SOURCE.siteLastModified +
+      "; re-checked live " + SOURCE.fetchedDate + "). Not exhaustive.";
+    document.getElementById("source-line").textContent = line;
+    document.getElementById("footer-note").textContent =
+      "Data parsed from a single community guide. Missing an item or character here means the source does not list it — it does not mean the item has no preference.";
+  }
+
+  function renderSearch(query) {
+    var container = document.getElementById("search-results");
+    container.innerHTML = "";
+    var q = query.trim().toLowerCase();
+    if (!q) return;
+
+    var matches = [];
+    CHARACTERS.forEach(function (c) {
+      if (!c.tiers) return;
+      c.tiers.forEach(function (t) {
+        t.items.forEach(function (item) {
+          if (item.toLowerCase().indexOf(q) !== -1) {
+            matches.push({ character: c.name, tier: t.tier, value: t.value, item: item });
+          }
+        });
+      });
+    });
+
+    if (matches.length === 0) {
+      var p = document.createElement("p");
+      p.className = "empty-note";
+      p.textContent = "No match found in the source data for \"" + query + "\".";
+      container.appendChild(p);
+      return;
+    }
+
+    matches.sort(function (a, b) {
+      var r = tierRank(a.tier) - tierRank(b.tier);
+      if (r !== 0) return r;
+      return a.character.localeCompare(b.character);
+    });
+
+    matches.forEach(function (m) {
+      var row = document.createElement("div");
+      row.className = "result-row " + (TIER_CLASS[m.tier] || "");
+      var left = document.createElement("span");
+      left.textContent = m.character + " — " + m.item;
+      var right = document.createElement("span");
+      right.className = "tag";
+      right.textContent = m.tier + (m.value ? " (" + m.value + ")" : "");
+      row.appendChild(left);
+      row.appendChild(right);
+      container.appendChild(row);
+    });
+  }
+
+  function populateCharacterSelect() {
+    var select = document.getElementById("character-select");
+    CHARACTERS.forEach(function (c) {
+      var opt = document.createElement("option");
+      opt.value = c.name;
+      opt.textContent = c.name;
+      select.appendChild(opt);
+    });
+    select.addEventListener("change", function () {
+      renderCharacter(select.value);
+    });
+    renderCharacter(CHARACTERS[0].name);
+  }
+
+  function renderCharacter(name) {
+    var detail = document.getElementById("character-detail");
+    detail.innerHTML = "";
+    var c = CHARACTERS.filter(function (x) { return x.name === name; })[0];
+    if (!c) return;
+
+    if (c.note) {
+      var p = document.createElement("p");
+      p.className = "char-note";
+      p.textContent = c.note;
+      detail.appendChild(p);
+      return;
+    }
+
+    var sorted = c.tiers.slice().sort(function (a, b) {
+      return tierRank(a.tier) - tierRank(b.tier);
+    });
+
+    sorted.forEach(function (t) {
+      var block = document.createElement("div");
+      block.className = "tier-block";
+
+      var h3 = document.createElement("h3");
+      var label = document.createElement("span");
+      label.textContent = t.tier + (t.value ? " (" + t.value + ")" : "");
+      var count = document.createElement("span");
+      count.textContent = t.items.length + " item" + (t.items.length === 1 ? "" : "s");
+      h3.appendChild(label);
+      h3.appendChild(count);
+      block.appendChild(h3);
+
+      if (t.items.length === 0) {
+        var empty = document.createElement("p");
+        empty.className = "empty-note";
+        empty.textContent = "The source does not list items for this tier.";
+        block.appendChild(empty);
+      } else {
+        var ul = document.createElement("ul");
+        t.items.forEach(function (item) {
+          var li = document.createElement("li");
+          li.textContent = item;
+          ul.appendChild(li);
+        });
+        block.appendChild(ul);
+      }
+
+      detail.appendChild(block);
+    });
+  }
+
+  document.getElementById("item-search").addEventListener("input", function (e) {
+    renderSearch(e.target.value);
+  });
+
+  setSourceLine();
+  populateCharacterSelect();
+})();
+</script>
+</body>
+</html>
